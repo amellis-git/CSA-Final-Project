@@ -5,6 +5,7 @@ public class GameLogic {
     private final int[][] grid;
     private final ArrayList<Piece> activePieces;
     private final Random random;
+    private int score; // Tracks the player's total score
 
     private final int[][][] SHAPE_DATABASE = {
             {{1}}, {{1, 1}}, {{1}, {1}}, {{1, 1, 1}}, {{1, 1, 1, 1}}, {{1, 1, 1, 1, 1}},
@@ -16,6 +17,7 @@ public class GameLogic {
         grid = new int[8][8];
         activePieces = new ArrayList<>();
         random = new Random();
+        score = 0; // Initialize score to zero
         generateThreePieces();
     }
 
@@ -56,15 +58,22 @@ public class GameLogic {
         }
 
         int[][] shape = piece.getShape();
+        int tilesPlaced = 0;
+
+        // Place the piece on the grid and count individual tiles
         for (int r = 0; r < piece.getRows(); r++) {
             for (int c = 0; c < piece.getCols(); c++) {
                 if (shape[r][c] == 1) {
                     grid[startRow + r][startCol + c] = 1;
+                    tilesPlaced++;
                 }
             }
         }
 
-        // Check and clear any filled lines immediately after placement
+        // Rule 1: Award 1 point per tile within the placed piece
+        score += tilesPlaced;
+
+        // Check and clear filled lines (handles Rule 2 & Rule 3 internally)
         checkAndClearLines();
 
         activePieces.remove(piece);
@@ -75,13 +84,15 @@ public class GameLogic {
     }
 
     /**
-     * Checks all rows and columns. Clears fully completed lines simultaneously.
+     * Checks all rows and columns. Clears fully completed lines simultaneously
+     * and calculates line clearing scores with multi-line exponential bonuses.
      */
     private void checkAndClearLines() {
         boolean[] rowsToClear = new boolean[8];
         boolean[] colsToClear = new boolean[8];
+        int totalLinesCleared = 0;
 
-        // 1. Identify which horizontal rows are full
+        // 1. Identify full horizontal rows
         for (int r = 0; r < 8; r++) {
             boolean rowFull = true;
             for (int c = 0; c < 8; c++) {
@@ -91,9 +102,12 @@ public class GameLogic {
                 }
             }
             rowsToClear[r] = rowFull;
+            if (rowFull) {
+                totalLinesCleared++;
+            }
         }
 
-        // 2. Identify which vertical columns are full
+        // 2. Identify full vertical columns
         for (int c = 0; c < 8; c++) {
             boolean colFull = true;
             for (int r = 0; r < 8; r++) {
@@ -103,6 +117,20 @@ public class GameLogic {
                 }
             }
             colsToClear[c] = colFull;
+            if (colFull) {
+                totalLinesCleared++;
+            }
+        }
+
+        // Calculate and add line clearing scores if lines were completed
+        if (totalLinesCleared > 0) {
+            // Rule 2 & 3: 10 base points per line, multiplied exponentially for combos
+            // Example: 1 line = 10 pts, 2 lines = 40 pts, 3 lines = 90 pts...
+            int linePoints = (int) (10 * Math.pow(totalLinesCleared, 2));
+            score += linePoints;
+
+            // Console print for testing/debugging purposes
+            System.out.println("Cleared " + totalLinesCleared + " line(s)! Points gained: " + linePoints + ". Total Score: " + score);
         }
 
         // 3. Clear identified horizontal rows
@@ -122,6 +150,11 @@ public class GameLogic {
                 }
             }
         }
+    }
+
+    // Getter method to retrieve current score for display
+    public int getScore() {
+        return score;
     }
 
     public int[][] getGrid() { return grid; }

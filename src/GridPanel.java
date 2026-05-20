@@ -2,6 +2,7 @@ import javax.swing.JPanel;
 import java.awt.Graphics;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.Point;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
@@ -14,17 +15,20 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
     private final int GRID_SIZE = 8;
     private final int PREVIEW_CELL_SIZE = 20;
 
+    // Visual offsets to make room for the scoreboard at the top
+    private final int SCOREBOARD_HEIGHT = 50;
+
     // Variables to manage dragging state
     private Piece selectedPiece = null;
-    private int selectedIndex = -1; // Tracks which of the 3 slots was picked
-    private Point mousePos = null;   // Current location of mouse cursor
+    private int selectedIndex = -1;
+    private Point mousePos = null;
 
     public GridPanel(GameLogic game) {
         this.game = game;
-        this.setPreferredSize(new Dimension(400, 600));
+        // Width: 400 | Height: 650 (50px Score + 400px Grid + 200px Tray)
+        this.setPreferredSize(new Dimension(400, 650));
         this.setBackground(Color.LIGHT_GRAY);
 
-        // Register the mouse listeners to this panel
         this.addMouseListener(this);
         this.addMouseMotionListener(this);
     }
@@ -33,12 +37,22 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
 
-        // 1. Draw the main 8x8 board
+        // 1. Draw the Scoreboard at the top
+        g.setColor(Color.BLACK);
+        g.setFont(new Font("Arial", Font.BOLD, 24));
+        String scoreText = "Score: " + game.getScore();
+
+        // Center the score text horizontally in the 400px wide window
+        int textWidth = g.getFontMetrics().stringWidth(scoreText);
+        int scoreX = (400 - textWidth) / 2;
+        g.drawString(scoreText, scoreX, 35); // 35px down places it cleanly in the 50px zone
+
+        // 2. Draw the main 8x8 board (shifted down by SCOREBOARD_HEIGHT)
         int[][] board = game.getGrid();
         for (int row = 0; row < GRID_SIZE; row++) {
             for (int col = 0; col < GRID_SIZE; col++) {
                 int x = col * CELL_SIZE;
-                int y = row * CELL_SIZE;
+                int y = (row * CELL_SIZE) + SCOREBOARD_HEIGHT;
 
                 if (board[row][col] == 1) {
                     g.setColor(Color.BLUE);
@@ -52,13 +66,12 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
             }
         }
 
-        // 2. Draw the available pieces below the board
+        // 3. Draw the available pieces below the board
         ArrayList<Piece> activePieces = game.getActivePieces();
         int slotWidth = 400 / 3;
-        int startY = 450;
+        int startY = 500; // Shifted down 50px to match window expansion
 
         for (int i = 0; i < activePieces.size(); i++) {
-            // Skip rendering the piece in the bottom slot if it is actively being dragged
             if (i == selectedIndex) {
                 continue;
             }
@@ -84,11 +97,10 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
             }
         }
 
-        // 3. Draw the piece dynamically moving under the cursor (scaled to full size)
+        // 4. Draw the piece dynamically moving under the cursor
         if (selectedPiece != null && mousePos != null) {
             int[][] shape = selectedPiece.getShape();
 
-            // Offset the drawing so the mouse cursor grips roughly the top-left section
             for (int r = 0; r < selectedPiece.getRows(); r++) {
                 for (int c = 0; c < selectedPiece.getCols(); c++) {
                     if (shape[r][c] == 1) {
@@ -112,8 +124,8 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
         int x = e.getX();
         int y = e.getY();
 
-        // Only allow selecting a piece if you clicked inside the bottom workspace area
-        if (y >= 430 && y <= 580) {
+        // Adjusted tray boundaries to account for new vertical layout (480 to 630)
+        if (y >= 480 && y <= 630) {
             int slotWidth = 400 / 3;
             int clickedSlot = x / slotWidth;
 
@@ -130,7 +142,7 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
     @Override
     public void mouseDragged(MouseEvent e) {
         if (selectedPiece != null) {
-            mousePos = e.getPoint(); // Continually track the moving mouse pointer
+            mousePos = e.getPoint();
             repaint();
         }
     }
@@ -138,25 +150,21 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
     @Override
     public void mouseReleased(MouseEvent e) {
         if (selectedPiece != null) {
-            // Find out which grid row/column the top-left segment of the piece is hovering over
-            // We subtract half a cell size to align with the drawing offset in paintComponent
+            // Subtracting SCOREBOARD_HEIGHT ensures grid math maps correctly to rows 0-7
             int targetCol = (mousePos.x - (CELL_SIZE / 2) + (CELL_SIZE / 2)) / CELL_SIZE;
-            int targetRow = (mousePos.y - (CELL_SIZE / 2) + (CELL_SIZE / 2)) / CELL_SIZE;
+            int targetRow = (mousePos.y - SCOREBOARD_HEIGHT - (CELL_SIZE / 2) + (CELL_SIZE / 2)) / CELL_SIZE;
 
-            // Attempt to permanently lock the piece onto the grid array backend
-            boolean success = game.placePiece(selectedPiece, targetRow, targetCol);
+            game.placePiece(selectedPiece, targetRow, targetCol);
 
-            // Reset drag variables
             selectedPiece = null;
             selectedIndex = -1;
             mousePos = null;
 
-            // Refresh screen to show locked blocks or to send the piece home
             repaint();
         }
     }
 
-    // Unused mandatory listener interfaces
+    // Mandatory compiler requirement overrides
     @Override public void mouseClicked(MouseEvent e) {}
     @Override public void mouseEntered(MouseEvent e) {}
     @Override public void mouseExited(MouseEvent e) {}

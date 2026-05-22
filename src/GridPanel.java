@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Point;
+import java.awt.Polygon;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
@@ -17,6 +18,12 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
 
     // Visual offsets to make room for the scoreboard at the top
     private final int SCOREBOARD_HEIGHT = 50;
+
+    // Restart Button layout bounds (Centered horizontally at Y=370)
+    private final int BTN_W = 60;
+    private final int BTN_H = 40;
+    private final int BTN_X = (400 - BTN_W) / 2; // 170
+    private final int BTN_Y = 370;
 
     // Variables to manage dragging state
     private Piece selectedPiece = null;
@@ -42,10 +49,9 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
         g.setFont(new Font("Arial", Font.BOLD, 24));
         String scoreText = "Score: " + game.getScore();
 
-        // Center the score text horizontally in the 400px wide window
         int textWidth = g.getFontMetrics().stringWidth(scoreText);
         int scoreX = (400 - textWidth) / 2;
-        g.drawString(scoreText, scoreX, 35); // 35px down places it cleanly in the 50px zone
+        g.drawString(scoreText, scoreX, 35);
 
         // 2. Draw the main 8x8 board (shifted down by SCOREBOARD_HEIGHT)
         int[][] board = game.getGrid();
@@ -69,7 +75,7 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
         // 3. Draw the available pieces below the board
         ArrayList<Piece> activePieces = game.getActivePieces();
         int slotWidth = 400 / 3;
-        int startY = 500; // Shifted down to match layout sizing
+        int startY = 500;
 
         for (int i = 0; i < activePieces.size(); i++) {
             if (i == selectedIndex) {
@@ -119,7 +125,7 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
         // 5. Draw Game Over Overlay Screen
         if (game.isGameOver()) {
             // Draw a dark semi-transparent tint overlay across the entire window
-            g.setColor(new Color(0, 0, 0, 180)); // 180 alpha handles the transparency blend
+            g.setColor(new Color(0, 0, 0, 180));
             g.fillRect(0, 0, 400, 650);
 
             // Draw "GAME OVER" message text
@@ -133,16 +139,49 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
             g.setColor(Color.WHITE);
             g.setFont(new Font("Arial", Font.BOLD, 20));
             String finalScoreText = "Final Score: " + game.getScore();
-            int finalScoreX = (400 - g.getFontMetrics().stringWidth(finalScoreText)) / 2; // Resolved variable name duplication
+            int finalScoreX = (400 - g.getFontMetrics().stringWidth(finalScoreText)) / 2;
             g.drawString(finalScoreText, finalScoreX, 330);
+
+            // Draw Green Restart Button Background
+            g.setColor(new Color(34, 177, 76)); // A nice game-style green
+            g.fillRect(BTN_X, BTN_Y, BTN_W, BTN_H);
+            g.setColor(Color.WHITE);
+            g.drawRect(BTN_X, BTN_Y, BTN_W, BTN_H);
+
+            // Calculate precise coordinates for an equilateral triangle pointing right
+            // Centered perfectly inside our 60x40 green container box
+            int triWidth = 16;
+            int triHeight = 18;
+            int startTriX = BTN_X + (BTN_W - triWidth) / 2;
+            int startTriY = BTN_Y + (BTN_H - triHeight) / 2;
+
+            int[] xPoints = { startTriX, startTriX + triWidth, startTriX };
+            int[] yPoints = { startTriY, startTriY + (triHeight / 2), startTriY + triHeight };
+
+            // Render the solid white triangle icon
+            g.fillPolygon(new Polygon(xPoints, yPoints, 3));
         }
     }
 
     // --- MOUSE LISTENERS ---
 
     @Override
+    public void mouseClicked(MouseEvent e) {
+        // Check if a click occurs while the game over screen is active
+        if (game.isGameOver()) {
+            int mx = e.getX();
+            int my = e.getY();
+
+            // Strict boundary check: Did the user click directly inside the green button?
+            if (mx >= BTN_X && mx <= (BTN_X + BTN_W) && my >= BTN_Y && my <= (BTN_Y + BTN_H)) {
+                game.restartGame();
+                repaint();
+            }
+        }
+    }
+
+    @Override
     public void mousePressed(MouseEvent e) {
-        // Block player interaction entirely if the game is over
         if (game.isGameOver()) {
             return;
         }
@@ -150,7 +189,6 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
         int x = e.getX();
         int y = e.getY();
 
-        // Adjusted tray boundaries to account for new vertical scoreboard spacing
         if (y >= 480 && y <= 630) {
             int slotWidth = 400 / 3;
             int clickedSlot = x / slotWidth;
@@ -176,7 +214,6 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
     @Override
     public void mouseReleased(MouseEvent e) {
         if (selectedPiece != null) {
-            // Subtracting SCOREBOARD_HEIGHT ensures grid math maps correctly to rows 0-7
             int targetCol = (mousePos.x - (CELL_SIZE / 2) + (CELL_SIZE / 2)) / CELL_SIZE;
             int targetRow = (mousePos.y - SCOREBOARD_HEIGHT - (CELL_SIZE / 2) + (CELL_SIZE / 2)) / CELL_SIZE;
 
@@ -190,8 +227,6 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
         }
     }
 
-    // Mandatory compiler requirement overrides for interfaces
-    @Override public void mouseClicked(MouseEvent e) {}
     @Override public void mouseEntered(MouseEvent e) {}
     @Override public void mouseExited(MouseEvent e) {}
     @Override public void mouseMoved(MouseEvent e) {}

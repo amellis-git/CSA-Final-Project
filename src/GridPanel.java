@@ -69,7 +69,7 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
         // 3. Draw the available pieces below the board
         ArrayList<Piece> activePieces = game.getActivePieces();
         int slotWidth = 400 / 3;
-        int startY = 500; // Shifted down 50px to match window expansion
+        int startY = 500; // Shifted down to match layout sizing
 
         for (int i = 0; i < activePieces.size(); i++) {
             if (i == selectedIndex) {
@@ -115,16 +115,42 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
                 }
             }
         }
+
+        // 5. Draw Game Over Overlay Screen
+        if (game.isGameOver()) {
+            // Draw a dark semi-transparent tint overlay across the entire window
+            g.setColor(new Color(0, 0, 0, 180)); // 180 alpha handles the transparency blend
+            g.fillRect(0, 0, 400, 650);
+
+            // Draw "GAME OVER" message text
+            g.setColor(Color.RED);
+            g.setFont(new Font("Arial", Font.BOLD, 36));
+            String overText = "GAME OVER";
+            int overX = (400 - g.getFontMetrics().stringWidth(overText)) / 2;
+            g.drawString(overText, overX, 280);
+
+            // Draw final score notice
+            g.setColor(Color.WHITE);
+            g.setFont(new Font("Arial", Font.BOLD, 20));
+            String finalScoreText = "Final Score: " + game.getScore();
+            int finalScoreX = (400 - g.getFontMetrics().stringWidth(finalScoreText)) / 2; // Resolved variable name duplication
+            g.drawString(finalScoreText, finalScoreX, 330);
+        }
     }
 
     // --- MOUSE LISTENERS ---
 
     @Override
     public void mousePressed(MouseEvent e) {
+        // Block player interaction entirely if the game is over
+        if (game.isGameOver()) {
+            return;
+        }
+
         int x = e.getX();
         int y = e.getY();
 
-        // Adjusted tray boundaries to account for new vertical layout (480 to 630)
+        // Adjusted tray boundaries to account for new vertical scoreboard spacing
         if (y >= 480 && y <= 630) {
             int slotWidth = 400 / 3;
             int clickedSlot = x / slotWidth;
@@ -164,7 +190,7 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
         }
     }
 
-    // Mandatory compiler requirement overrides
+    // Mandatory compiler requirement overrides for interfaces
     @Override public void mouseClicked(MouseEvent e) {}
     @Override public void mouseEntered(MouseEvent e) {}
     @Override public void mouseExited(MouseEvent e) {}

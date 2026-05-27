@@ -9,7 +9,7 @@ public class GameLogic {
     private final ArrayList<Piece> activePieces;
     private final Random random;
     private int score;
-    private int highScore; // Tracks persistent all-time top score
+    private int highScore;
     private boolean isGameOver;
 
     private int comboStreak;
@@ -23,6 +23,11 @@ public class GameLogic {
             {{1, 1, 1}, {1, 0, 0}, {1, 0, 0}}, {{0, 1, 1}, {1, 1, 0}}, {{1, 1, 1}, {0, 1, 0}}
     };
 
+    private boolean isAnimating = false;
+    private int animationTick = 0;
+    private boolean[] rowsToClear = new boolean[8];
+    private boolean[] colsToClear = new boolean[8];
+
     public GameLogic() {
         grid = new int[8][8];
         activePieces = new ArrayList<>();
@@ -31,13 +36,10 @@ public class GameLogic {
         comboStreak = 0;
         movesSinceLastClear = 0;
         isGameOver = false;
-        loadHighScore(); // Load historical score at launch
+        loadHighScore();
         generateThreePieces();
     }
 
-    /**
-     * Loads the top score from a local text file. Creates it if missing.
-     */
     private void loadHighScore() {
         try {
             File file = new File(HIGH_SCORE_FILE);
@@ -56,9 +58,6 @@ public class GameLogic {
         }
     }
 
-    /**
-     * Saves a new record score permanently to disk.
-     */
     private void saveHighScore() {
         try {
             FileWriter writer = new FileWriter(HIGH_SCORE_FILE);
@@ -92,6 +91,10 @@ public class GameLogic {
         this.comboStreak = 0;
         this.movesSinceLastClear = 0;
         this.isGameOver = false;
+        this.isAnimating = false;
+        this.animationTick = 0;
+        this.rowsToClear = new boolean[8];
+        this.colsToClear = new boolean[8];
         generateThreePieces();
         System.out.println("Game successfully restarted!");
     }
@@ -116,7 +119,7 @@ public class GameLogic {
     }
 
     public boolean placePiece(Piece piece, int startRow, int startCol) {
-        if (isGameOver || !canPlacePiece(piece, startRow, startCol)) {
+        if (isGameOver || isAnimating || !canPlacePiece(piece, startRow, startCol)) {
             return false;
         }
 
@@ -134,7 +137,6 @@ public class GameLogic {
 
         score += tilesPlaced;
 
-        // Update high score in real-time if live score beats it
         if (score > highScore) {
             highScore = score;
             saveHighScore();
@@ -143,9 +145,9 @@ public class GameLogic {
         checkAndClearLines();
         activePieces.remove(piece);
 
-        if (activePieces.isEmpty()) {
+        if (activePieces.isEmpty() && !isAnimating) {
             generateThreePieces();
-        } else {
+        } else if (!isAnimating) {
             checkGameOver();
         }
         return true;
@@ -169,8 +171,8 @@ public class GameLogic {
     }
 
     private void checkAndClearLines() {
-        boolean[] rowsToClear = new boolean[8];
-        boolean[] colsToClear = new boolean[8];
+        rowsToClear = new boolean[8];
+        colsToClear = new boolean[8];
         int totalLinesCleared = 0;
 
         for (int r = 0; r < 8; r++) {
@@ -192,6 +194,8 @@ public class GameLogic {
         }
 
         if (totalLinesCleared > 0) {
+            isAnimating = true;
+            animationTick = 0;
             comboStreak++;
             movesSinceLastClear = 0;
 
@@ -213,8 +217,6 @@ public class GameLogic {
                 highScore = score;
                 saveHighScore();
             }
-
-            System.out.println("Lines Cleared: " + totalLinesCleared + " | Points: " + turnPoints);
         } else {
             if (comboStreak > 0) {
                 movesSinceLastClear++;
@@ -224,20 +226,84 @@ public class GameLogic {
                 }
             }
         }
+    }
 
+    public void advanceAnimation() {
+        if (!isAnimating) return;
+        animationTick++;
+
+        if (animationTick >= 35) {
+            finalizeLineClearing();
+        }
+    }
+
+    private void finalizeLineClearing() {
+        // THIS RESTORES THE DATA REMOVAL THAT WAS ACCIDENTALLY DELETED
         for (int r = 0; r < 8; r++) {
             if (rowsToClear[r]) {
                 for (int c = 0; c < 8; c++) grid[r][c] = 0;
             }
         }
-
         for (int c = 0; c < 8; c++) {
             if (colsToClear[c]) {
                 for (int r = 0; r < 8; r++) grid[r][c] = 0;
             }
         }
+        isAnimating = false;
+        animationTick = 0;
+
+        if (activePieces.isEmpty()) {
+            generateThreePieces();
+        } else {
+            checkGameOver();
+        }
     }
 
+    public boolean[][] predictLinesToClear(Piece piece, int startRow, int startCol) {
+        boolean[][] predictions = new boolean[2][8];
+        if (!canPlacePiece(piece, startRow, startCol)) {
+            return predictions;
+        }
+
+        int[][] tempGrid = new int[8][8];
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) {
+                tempGrid[r][c] = grid[r][c];
+            }
+        }
+
+        int[][] shape = piece.getShape();
+        for (int r = 0; r < piece.getRows(); r++) {
+            for (int c = 0; c < piece.getCols(); c++) {
+                if (shape[r][c] == 1) {
+                    tempGrid[startRow + r][startCol + c] = 1;
+                }
+            }
+        }
+
+        for (int r = 0; r < 8; r++) {
+            boolean rowFull = true;
+            for (int c = 0; c < 8; c++) {
+                if (tempGrid[r][c] == 0) { rowFull = false; break; }
+            }
+            predictions[0][r] = rowFull;
+        }
+
+        for (int c = 0; c < 8; c++) {
+            boolean colFull = true;
+            for (int r = 0; r < 8; r++) {
+                if (tempGrid[r][c] == 0) { colFull = false; break; }
+            }
+            predictions[1][c] = colFull;
+        }
+
+        return predictions;
+    }
+
+    public boolean isAnimating() { return isAnimating; }
+    public int getAnimationTick() { return animationTick; }
+    public boolean[] getRowsToClear() { return rowsToClear; }
+    public boolean[] getColsToClear() { return colsToClear; }
     public boolean isGameOver() { return isGameOver; }
     public int getScore() { return score; }
     public int getHighScore() { return highScore; }

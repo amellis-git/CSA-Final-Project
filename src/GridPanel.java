@@ -1,13 +1,16 @@
 import javax.swing.JPanel;
+import javax.swing.ImageIcon;
 import java.awt.Graphics;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Image;
 import java.awt.Point;
 import java.awt.Polygon;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
+import java.net.URL;
 import java.util.ArrayList;
 
 public class GridPanel extends JPanel implements MouseListener, MouseMotionListener {
@@ -16,44 +19,117 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
     private final int GRID_SIZE = 8;
     private final int PREVIEW_CELL_SIZE = 20;
 
-    // Visual offsets to make room for the scoreboard at the top
-    private final int SCOREBOARD_HEIGHT = 50;
+    // Visual offsets expanded to 85px to stack high score above current score safely
+    private final int SCOREBOARD_HEIGHT = 85;
 
-    // Restart Button layout bounds (Centered horizontally at Y=370)
+    // Restart Button layout bounds (Centered horizontally adjusted for new vertical scale)
     private final int BTN_W = 60;
     private final int BTN_H = 40;
-    private final int BTN_X = (400 - BTN_W) / 2; // 170
-    private final int BTN_Y = 370;
+    private final int BTN_X = (400 - BTN_W) / 2;
+    private final int BTN_Y = 400;
 
     // Variables to manage dragging state
     private Piece selectedPiece = null;
     private int selectedIndex = -1;
     private Point mousePos = null;
 
+    // Image Asset Variables
+    private Image tileImage = null;
+    private Image gridBgImage = null;
+    private Image crownImage = null;
+
     public GridPanel(GameLogic game) {
         this.game = game;
-        // Width: 400 | Height: 650 (50px Score + 400px Grid + 200px Tray)
-        this.setPreferredSize(new Dimension(400, 650));
-        this.setBackground(Color.LIGHT_GRAY);
+        // Total panel height bumped to 685px to account for the header expansion
+        this.setPreferredSize(new Dimension(400, 685));
+        this.setBackground(Color.decode("#364a85"));
+
+        // 1. Load the TILE image
+        try {
+            URL imgURL = getClass().getResource("/tile.png");
+            if (imgURL != null) {
+                this.tileImage = new ImageIcon(imgURL).getImage();
+            } else {
+                System.out.println("Error: Could not find tile.png in src folder.");
+            }
+        } catch (Exception e) {
+            System.out.println("Failed to load tile image asset.");
+        }
+
+        // 2. Load the GRID BACKGROUND image
+        try {
+            URL bgURL = getClass().getResource("/grid_bg.png");
+            if (bgURL != null) {
+                this.gridBgImage = new ImageIcon(bgURL).getImage();
+            } else {
+                System.out.println("Error: Could not find grid_bg.png in src folder.");
+            }
+        } catch (Exception e) {
+            System.out.println("Failed to load grid background asset.");
+        }
 
         this.addMouseListener(this);
         this.addMouseMotionListener(this);
+
+        try {
+            URL crownURL = getClass().getResource("/crown.png");
+            if (crownURL != null) {
+                this.crownImage = new ImageIcon(crownURL).getImage();
+            } else {
+                System.out.println("Error: Could not find crown.png in src folder. Using text fallback.");
+            }
+        } catch (Exception e) {
+            System.out.println("Failed to load crown image asset.");
+        }
+    }
+
+    private void drawIndividualTile(Graphics g, int x, int y, int size) {
+        if (tileImage != null) {
+            g.drawImage(tileImage, x, y, size, size, this);
+        } else {
+            g.setColor(Color.BLUE);
+            g.fillRect(x, y, size, size);
+            g.setColor(Color.BLACK);
+            g.drawRect(x, y, size, size);
+        }
     }
 
     @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
 
-        // 1. Draw the Scoreboard at the top
-        g.setColor(Color.BLACK);
-        g.setFont(new Font("Arial", Font.BOLD, 24));
-        String scoreText = "Score: " + game.getScore();
+        // 1. Top-Left Box: All-Time Top Score Display (#fcb42b)
+        // 1. Top-Left Box: All-Time Top Score Display (#fcb42b)
+        g.setColor(Color.decode("#fcb42b"));
+        g.setFont(new Font("my_font", Font.BOLD, 18));
+        String topScoreText = Integer.toString(game.getHighScore());
 
+// If the crown image loaded successfully, draw it as a sprite icon
+        if (crownImage != null) {
+            // Draws a 22x22 pixel crown icon at coordinates X:15, Y:12
+            g.drawImage(crownImage, 15, 12, 22, 22, this);
+            // Draw the top score text offset to the right of the crown image (X:43)
+            g.drawString(topScoreText, 43, 30);
+        } else {
+            // Text emoji fallback in case the image fails to load or compile
+            g.drawString("👑 " + topScoreText, 15, 30);
+        }
+
+
+        // 2. Center Header: Current Live Score Layout
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("my_font", Font.BOLD, 32));
+        String scoreText = Integer.toString(game.getScore());
         int textWidth = g.getFontMetrics().stringWidth(scoreText);
         int scoreX = (400 - textWidth) / 2;
-        g.drawString(scoreText, scoreX, 35);
+        g.drawString(scoreText, scoreX, 68); // Placed safely below the crown display line
 
-        // 2. Draw the main 8x8 board (shifted down by SCOREBOARD_HEIGHT)
+        // 3. Draw your custom grid image as a background layer
+        if (gridBgImage != null) {
+            g.drawImage(gridBgImage, 0, SCOREBOARD_HEIGHT, 400, 400, this);
+        }
+
+        // 4. Draw the main 8x8 board grid and placed items
         int[][] board = game.getGrid();
         for (int row = 0; row < GRID_SIZE; row++) {
             for (int col = 0; col < GRID_SIZE; col++) {
@@ -61,21 +137,22 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
                 int y = (row * CELL_SIZE) + SCOREBOARD_HEIGHT;
 
                 if (board[row][col] == 1) {
-                    g.setColor(Color.BLUE);
-                    g.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+                    drawIndividualTile(g, x, y, CELL_SIZE);
                 } else {
-                    g.setColor(Color.WHITE);
-                    g.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+                    if (gridBgImage == null) {
+                        g.setColor(Color.WHITE);
+                        g.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+                    }
+                    g.setColor(new Color(0, 0, 0, 40));
+                    g.drawRect(x, y, CELL_SIZE, CELL_SIZE);
                 }
-                g.setColor(Color.BLACK);
-                g.drawRect(x, y, CELL_SIZE, CELL_SIZE);
             }
         }
 
-        // 3. Draw the available pieces below the board
+        // 5. Draw the available pieces below the board
         ArrayList<Piece> activePieces = game.getActivePieces();
         int slotWidth = 400 / 3;
-        int startY = 500;
+        int startY = 535; // Shifted down 35px to clear header update layout bounds
 
         for (int i = 0; i < activePieces.size(); i++) {
             if (i == selectedIndex) {
@@ -93,17 +170,13 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
                     if (shape[r][c] == 1) {
                         int drawX = slotXStart + offsetX + (c * PREVIEW_CELL_SIZE);
                         int drawY = startY + (r * PREVIEW_CELL_SIZE);
-
-                        g.setColor(Color.DARK_GRAY);
-                        g.fillRect(drawX, drawY, PREVIEW_CELL_SIZE, PREVIEW_CELL_SIZE);
-                        g.setColor(Color.BLACK);
-                        g.drawRect(drawX, drawY, PREVIEW_CELL_SIZE, PREVIEW_CELL_SIZE);
+                        drawIndividualTile(g, drawX, drawY, PREVIEW_CELL_SIZE);
                     }
                 }
             }
         }
 
-        // 4. Draw the piece dynamically moving under the cursor
+        // 6. Draw the piece dynamically moving under the cursor
         if (selectedPiece != null && mousePos != null) {
             int[][] shape = selectedPiece.getShape();
 
@@ -112,44 +185,34 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
                     if (shape[r][c] == 1) {
                         int drawX = mousePos.x + (c * CELL_SIZE) - (CELL_SIZE / 2);
                         int drawY = mousePos.y + (r * CELL_SIZE) - (CELL_SIZE / 2);
-
-                        g.setColor(Color.BLUE);
-                        g.fillRect(drawX, drawY, CELL_SIZE, CELL_SIZE);
-                        g.setColor(Color.BLACK);
-                        g.drawRect(drawX, drawY, CELL_SIZE, CELL_SIZE);
+                        drawIndividualTile(g, drawX, drawY, CELL_SIZE);
                     }
                 }
             }
         }
 
-        // 5. Draw Game Over Overlay Screen
+        // 7. Draw Game Over Overlay Screen
         if (game.isGameOver()) {
-            // Draw a dark semi-transparent tint overlay across the entire window
             g.setColor(new Color(0, 0, 0, 180));
-            g.fillRect(0, 0, 400, 650);
+            g.fillRect(0, 0, 400, 685);
 
-            // Draw "GAME OVER" message text
             g.setColor(Color.RED);
-            g.setFont(new Font("Arial", Font.BOLD, 36));
+            g.setFont(new Font("my_font", Font.BOLD, 36));
             String overText = "GAME OVER";
             int overX = (400 - g.getFontMetrics().stringWidth(overText)) / 2;
-            g.drawString(overText, overX, 280);
+            g.drawString(overText, overX, 300);
 
-            // Draw final score notice
             g.setColor(Color.WHITE);
-            g.setFont(new Font("Arial", Font.BOLD, 20));
+            g.setFont(new Font("my_font", Font.BOLD, 20));
             String finalScoreText = "Final Score: " + game.getScore();
             int finalScoreX = (400 - g.getFontMetrics().stringWidth(finalScoreText)) / 2;
-            g.drawString(finalScoreText, finalScoreX, 330);
+            g.drawString(finalScoreText, finalScoreX, 350);
 
-            // Draw Green Restart Button Background
-            g.setColor(new Color(34, 177, 76)); // A nice game-style green
+            g.setColor(new Color(34, 177, 76));
             g.fillRect(BTN_X, BTN_Y, BTN_W, BTN_H);
             g.setColor(Color.WHITE);
             g.drawRect(BTN_X, BTN_Y, BTN_W, BTN_H);
 
-            // Calculate precise coordinates for an equilateral triangle pointing right
-            // Centered perfectly inside our 60x40 green container box
             int triWidth = 16;
             int triHeight = 18;
             int startTriX = BTN_X + (BTN_W - triWidth) / 2;
@@ -158,7 +221,6 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
             int[] xPoints = { startTriX, startTriX + triWidth, startTriX };
             int[] yPoints = { startTriY, startTriY + (triHeight / 2), startTriY + triHeight };
 
-            // Render the solid white triangle icon
             g.fillPolygon(new Polygon(xPoints, yPoints, 3));
         }
     }
@@ -167,12 +229,9 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
 
     @Override
     public void mouseClicked(MouseEvent e) {
-        // Check if a click occurs while the game over screen is active
         if (game.isGameOver()) {
             int mx = e.getX();
             int my = e.getY();
-
-            // Strict boundary check: Did the user click directly inside the green button?
             if (mx >= BTN_X && mx <= (BTN_X + BTN_W) && my >= BTN_Y && my <= (BTN_Y + BTN_H)) {
                 game.restartGame();
                 repaint();
@@ -182,17 +241,14 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
 
     @Override
     public void mousePressed(MouseEvent e) {
-        if (game.isGameOver()) {
-            return;
-        }
+        if (game.isGameOver()) return;
 
         int x = e.getX();
         int y = e.getY();
-
-        if (y >= 480 && y <= 630) {
+        // Dynamic tray boundary limits shifted to reflect the extended board layout
+        if (y >= 515 && y <= 665) {
             int slotWidth = 400 / 3;
             int clickedSlot = x / slotWidth;
-
             ArrayList<Piece> activePieces = game.getActivePieces();
             if (clickedSlot >= 0 && clickedSlot < activePieces.size()) {
                 selectedPiece = activePieces.get(clickedSlot);
@@ -222,7 +278,6 @@ public class GridPanel extends JPanel implements MouseListener, MouseMotionListe
             selectedPiece = null;
             selectedIndex = -1;
             mousePos = null;
-
             repaint();
         }
     }
